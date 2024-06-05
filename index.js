@@ -12,102 +12,123 @@ const env = {
 
 const blockHeaderService = new WhatsOnChain()
 const key = PrivateKey.fromWif(env.wif)
+console.log({ spendingFrom: key.toAddress() })
+
 app.use(bodyParser.json())
 
 app.get('/api/submit', async (req, res) => {
-    const lockingScript = new Script()
-    lockingScript.writeNumber(Random(1)[0])
-    lockingScript.writeOpCode(OP.OP_DROP)
-    lockingScript.writeScript(new P2PKH().lock(key.toAddress()))
+    try {
+        const lockingScript = new Script()
+        lockingScript.writeBin(Random(1))
+        lockingScript.writeOpCode(OP.OP_DROP)
+        lockingScript.writeScript(new P2PKH().lock(key.toAddress()))
 
-    // grab the first file in the directory and use it as the source transaction
-    const spendTxid = fs.readdirSync('./transactions')[0]
-    const sourceTransacion = Transaction.fromBinary(fs.readFileSync(spendTxid))
+        // grab the first file in the directory and use it as the source transaction
+        const spendTxid = fs.readdirSync('./transactions')[0]
+        const sourceTransaction = Transaction.fromBinary(fs.readFileSync('./transactions/' + spendTxid))
 
-    const tx = new Transaction()
-    tx.addInput({
-        sourceTransaction,
-        sourceOutputIndex: 0,
-        unlockingScriptTemplate: new P2PKH().unlock(key)
-    })
-    tx.addOutput({
-        change: true,
-        lockingScript
-    })
-    await tx.fee()
-    await tx.sign()
+        const tx = new Transaction()
+        tx.addInput({
+            sourceTransaction,
+            sourceOutputIndex: 0,
+            unlockingScriptTemplate: new P2PKH().unlock(key)
+        })
+        tx.addOutput({
+            change: true,
+            lockingScript
+        })
+        await tx.fee()
+        await tx.sign()
+
+        console.log({ tx: tx.toHex()})
 
 
-    const arc = new ARC('https://arc.taal.com', {
-        headers: {
-            'X-CallbackUrl': env.callbackUrl
+        const arc = new ARC('https://arc.taal.com', {
+            headers: {
+                'X-CallbackUrl': env.callbackUrl
+            }
+        })
+
+        const response = await tx.broadcast(arc)
+
+        console.log({ response })
+
+        if (!!response.txid) {
+            // create new file with the transaction
+            fs.writeFileSync(`./transactions/${tx.id('hex')}`, Buffer.from(tx.toBinary()))
+            // remove source Transactions
+            fs.unlinkSync(`./transactions/${sourceTransaction.id('hex')}`)
         }
-    })
 
-    const response = await tx.broadcast(arc)
-
-    if (!!response.txid) {
-        // create new file with the transaction
-        fs.writeFileSync(`./transactions/${tx.id('hex')}`, Buffer.from(tx.toBinary()))
-        // remove source Transactions
-        fs.unlinkSync(`./transactions/${sourceTransacion.id('hex')}`)
+        res.status(200).send(response.txid)
+    } catch (error) {
+        console.error({ error })
+        res.status(500).send(error.message)
     }
-
-    res.send(txid)
 })
 
 app.get('/api/spent/:txid/:vout', (req, res) => {
-    const txid = req.params.txid
-    const vout = req.params.vout
+    try { 
+        const txid = req.params.txid
+        const vout = req.params.vout
 
 
-    // load list of all beef files
-    const beefs = fs.readdirSync('/beef')
-    const txs = fs.readdirSync('/transactions')
-    const transactions = []
-    let exists = false
-    let spent
-    for (const file of beefs) {
-        if (file === txid) exists = true
-        const tx = Transaction.fromBEEF(fs.readFileSync(file))
-        if (tx.inputs.some(input => input.sourceTransaction.id('hex') === txid && input.sourceOutputIndex === vout)) {
-            exists = true
-            spent = tx.id('hex')
-            break
-        }
-        transactions.push(tx)
-    }
-    if (typeof spent === 'undefined') {
-        for (const file of txs) {
+        // load list of all beef files
+        const beefs = fs.readdirSync('/beef')
+        const txs = fs.readdirSync('/transactions')
+        const transactions = []
+        let exists = false
+        let spent
+        for (const file of beefs) {
             if (file === txid) exists = true
-            const tx = Transaction.fromBinary(fs.readFileSync(file))
-            if (tx.inputs.some(input => input.sourceTXID === txid && input.sourceOutputIndex === vout)) {
+            const tx = Transaction.fromBEEF(fs.readFileSync('./beef/' + file))
+            if (tx.inputs.some(input => input.sourceTransaction.id('hex') === txid && input.sourceOutputIndex === vout)) {
                 exists = true
                 spent = tx.id('hex')
                 break
             }
             transactions.push(tx)
         }
+        if (typeof spent === 'undefined') {
+            for (const file of txs) {
+                if (file === txid) exists = true
+                const tx = Transaction.fromBinary(fs.readFileSync('./transactions/' + file))
+                if (tx.inputs.some(input => input.sourceTXID === txid && input.sourceOutputIndex === vout)) {
+                    exists = true
+                    spent = tx.id('hex')
+                    break
+                }
+                transactions.push(tx)
+            }
+        }
+        
+        res.send({ exists, spent })
+    } catch (error) {
+        console.error({ error })
+        res.status(500).send(error.message)
     }
-    
-    res.send({ exists, spent })
 })
 
 app.post('/api/callback', async (req, res) => {
-    if (req.body.txStatus === 'MINED') {
-        const tx = Transaction.fromBinary(fs.readFileSync(`/transactions/${req.body.txid}`))
-        tx.merklePath = MerklePath.fromHex(req.body.merklePath)
+    try {
+        if (req.body.txStatus === 'MINED') {
+            const tx = Transaction.fromBinary(fs.readFileSync(`/transactions/${req.body.txid}`))
+            tx.merklePath = MerklePath.fromHex(req.body.merklePath)
 
-        const valid = await tx.verify(blockHeaderService)
+            const valid = await tx.verify(blockHeaderService)
 
-        const beef = tx.toBEEF()
-        const f = fs.createWriteStream(`/beef/${req.body.txid}`)
-        f.write(beef)
-        console.log(req.body.txid, ' was mined, and saved to BEEF, and is ', valid ? 'valid' : 'invalid')
-    } else {
-        console.log(req.body)
+            const beef = tx.toBEEF()
+            const f = fs.createWriteStream(`/beef/${req.body.txid}`)
+            f.write(beef)
+            console.log(req.body.txid, ' was mined, and saved to BEEF, and is ', valid ? 'valid' : 'invalid')
+        } else {
+            console.log(req.body)
+        }
+        res.status(200).send('ok')
+    } catch (error) {
+        console.error({ error })
+        res.status(500).send(error.message)
     }
-    res.status(200).send('ok')
 })
 
 app.listen(port, () => {
