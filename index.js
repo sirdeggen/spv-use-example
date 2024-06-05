@@ -7,7 +7,7 @@ const { Transaction, Script, PrivateKey, OP, Random, P2PKH, ARC, MerklePath, Wha
 
 const env = {
     callbackUrl: 'https://fcc9878a3a3c.ngrok.app/api/callback',
-    wif: 'KxGXqAFxDashKbabVixgitydELRehTJkq7HCEowFniqrrAi3DXFx'
+    wif: 'KxGXqAFxDashKbabVixgitydELRehTJkq7HCEowFniqrrAi3DXFx',
 }
 
 const blockHeaderService = new WhatsOnChain()
@@ -31,22 +31,21 @@ app.get('/api/submit', async (req, res) => {
         tx.addInput({
             sourceTransaction,
             sourceOutputIndex: 0,
-            unlockingScriptTemplate: new P2PKH().unlock(key)
+            unlockingScriptTemplate: new P2PKH().unlock(key),
         })
         tx.addOutput({
             change: true,
-            lockingScript
+            lockingScript,
         })
         await tx.fee()
         await tx.sign()
 
-        console.log({ tx: tx.toHex()})
-
+        console.log({ tx: tx.toHex() })
 
         const arc = new ARC('https://arc.taal.com', {
             headers: {
-                'X-CallbackUrl': env.callbackUrl
-            }
+                'X-CallbackUrl': env.callbackUrl,
+            },
         })
 
         const response = await tx.broadcast(arc)
@@ -68,10 +67,9 @@ app.get('/api/submit', async (req, res) => {
 })
 
 app.get('/api/spent/:txid/:vout', (req, res) => {
-    try { 
+    try {
         const txid = req.params.txid
         const vout = req.params.vout
-
 
         // load list of all beef files
         const beefs = fs.readdirSync('./beef')
@@ -82,7 +80,9 @@ app.get('/api/spent/:txid/:vout', (req, res) => {
         for (const file of beefs) {
             if (file === txid) exists = true
             const tx = Transaction.fromBEEF(fs.readFileSync('./beef/' + file))
-            if (tx.inputs.some(input => input.sourceTransaction.id('hex') === txid && input.sourceOutputIndex === vout)) {
+            if (
+                tx.inputs.some(input => input.sourceTransaction.id('hex') === txid && input.sourceOutputIndex === vout)
+            ) {
                 exists = true
                 spentTxid = tx.id('hex')
                 break
@@ -93,10 +93,12 @@ app.get('/api/spent/:txid/:vout', (req, res) => {
             for (const file of txs) {
                 if (file === txid) exists = true
                 const tx = Transaction.fromBinary(fs.readFileSync('./transactions/' + file))
-                if (tx.inputs.some(input => {
-                    console.log({ sourceTXID: input.sourceTXID })
-                    return input.sourceTXID === txid && input.sourceOutputIndex === Number(vout)
-                })) {
+                if (
+                    tx.inputs.some(input => {
+                        console.log({ sourceTXID: input.sourceTXID })
+                        return input.sourceTXID === txid && input.sourceOutputIndex === Number(vout)
+                    })
+                ) {
                     exists = true
                     spentTxid = tx.id('hex')
                     break
@@ -104,7 +106,7 @@ app.get('/api/spent/:txid/:vout', (req, res) => {
                 transactions.push(tx)
             }
         }
-        
+
         res.status(200).send({ exists, spentTxid })
     } catch (error) {
         console.error({ error })
