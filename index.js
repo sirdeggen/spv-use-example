@@ -120,9 +120,7 @@ app.post('/api/callback', async (req, res) => {
 
             const valid = await tx.verify(blockHeaderService)
 
-            const beef = tx.toBEEF()
-            const f = fs.createWriteStream(`./beef/${req.body.txid}`)
-            f.write(beef)
+            const f = fs.writeFileSync(`./beef/${req.body.txid}`, Buffer.from(tx.toBEEF()))
             console.log(req.body.txid, ' was mined, and saved to BEEF, and is ', valid ? 'valid' : 'invalid')
         } else {
             console.log(req.body)
