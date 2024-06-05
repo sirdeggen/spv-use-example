@@ -5,8 +5,13 @@ const fs = require('fs')
 const port = 3000
 const { Transaction, Script, PrivateKey, OP, Random, P2PKH, ARC, MerklePath, WhatsOnChain } = require('@bsv/sdk')
 
+const env = {
+    callbackUrl: 'https://fcc9878a3a3c.ngrok.app/api/callback',
+    wif: 'KxGXqAFxDashKbabVixgitydELRehTJkq7HCEowFniqrrAi3DXFx'
+}
+
 const blockHeaderService = new WhatsOnChain()
-const key = PrivateKey.fromWif('KxGXqAFxDashKbabVixgitydELRehTJkq7HCEowFniqrrAi3DXFx')
+const key = PrivateKey.fromWif(env.wif)
 app.use(bodyParser.json())
 
 app.get('/api/submit', async (req, res) => {
@@ -35,7 +40,7 @@ app.get('/api/submit', async (req, res) => {
 
     const arc = new ARC('https://arc.taal.com', {
         headers: {
-            'X-CallbackUrl': 'https://fcc9878a3a3c.ngrok.app/api/callback'
+            'X-CallbackUrl': env.callbackUrl
         }
     })
 
