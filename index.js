@@ -74,35 +74,38 @@ app.get('/api/spent/:txid/:vout', (req, res) => {
 
 
         // load list of all beef files
-        const beefs = fs.readdirSync('/beef')
-        const txs = fs.readdirSync('/transactions')
+        const beefs = fs.readdirSync('./beef')
+        const txs = fs.readdirSync('./transactions')
         const transactions = []
         let exists = false
-        let spent
+        let spentTxid
         for (const file of beefs) {
             if (file === txid) exists = true
             const tx = Transaction.fromBEEF(fs.readFileSync('./beef/' + file))
             if (tx.inputs.some(input => input.sourceTransaction.id('hex') === txid && input.sourceOutputIndex === vout)) {
                 exists = true
-                spent = tx.id('hex')
+                spentTxid = tx.id('hex')
                 break
             }
             transactions.push(tx)
         }
-        if (typeof spent === 'undefined') {
+        if (typeof spentTxid === 'undefined') {
             for (const file of txs) {
                 if (file === txid) exists = true
                 const tx = Transaction.fromBinary(fs.readFileSync('./transactions/' + file))
-                if (tx.inputs.some(input => input.sourceTXID === txid && input.sourceOutputIndex === vout)) {
+                if (tx.inputs.some(input => {
+                    console.log({ sourceTXID: input.sourceTXID })
+                    return input.sourceTXID === txid && input.sourceOutputIndex === Number(vout)
+                })) {
                     exists = true
-                    spent = tx.id('hex')
+                    spentTxid = tx.id('hex')
                     break
                 }
                 transactions.push(tx)
             }
         }
         
-        res.send({ exists, spent })
+        res.status(200).send({ exists, spentTxid })
     } catch (error) {
         console.error({ error })
         res.status(500).send(error.message)
