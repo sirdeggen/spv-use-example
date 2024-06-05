@@ -19,3 +19,9 @@ ngrok http 3000
 
 Update line 9 of `index.js` replacing the placeholder ngrok with your own as seen in the response to ngrok command above. Keep the path after the domain.
 
+Start the server
+```bash
+node index.js
+```
+
+Hit the [submit endpoint](http://localhost:3000/api/submit) in browser to create a new transaction, and simply observe the console.
