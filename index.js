@@ -115,13 +115,13 @@ app.get('/api/spent/:txid/:vout', (req, res) => {
 app.post('/api/callback', async (req, res) => {
     try {
         if (req.body.txStatus === 'MINED') {
-            const tx = Transaction.fromBinary(fs.readFileSync(`/transactions/${req.body.txid}`))
+            const tx = Transaction.fromBinary(fs.readFileSync(`./transactions/${req.body.txid}`))
             tx.merklePath = MerklePath.fromHex(req.body.merklePath)
 
             const valid = await tx.verify(blockHeaderService)
 
             const beef = tx.toBEEF()
-            const f = fs.createWriteStream(`/beef/${req.body.txid}`)
+            const f = fs.createWriteStream(`./beef/${req.body.txid}`)
             f.write(beef)
             console.log(req.body.txid, ' was mined, and saved to BEEF, and is ', valid ? 'valid' : 'invalid')
         } else {
